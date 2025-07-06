@@ -1,5 +1,4 @@
 import cv2
-import numpy as np
 import cupy as cp
 import os
 import threading
@@ -39,7 +38,7 @@ class Analytics(threading.Thread):
         resize_interpolation = cv2.INTER_LINEAR
 
         fps = cap.get(cv2.CAP_PROP_FPS)
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fourcc = cv2.VideoWriter.fourcc(*'mp4v')
         #out = cv2.VideoWriter("D:\\data\\Output\\output.mp4", fourcc, 60, (self.target_width, self.target_height))
 
         frame_counter = 0
@@ -48,6 +47,7 @@ class Analytics(threading.Thread):
             # Read a frame from the video
             success, originalFrame1 = cap.read()
 
+            #repeat
             frame_counter += 1
             if frame_counter == cap.get(cv2.CAP_PROP_FRAME_COUNT):
                 frame_counter = 0 #Or whatever as long as it is the same as next line
@@ -57,7 +57,7 @@ class Analytics(threading.Thread):
             originalFrame = cv2.cvtColor(originalFrame, cv2.COLOR_GRAY2BGR)
 
             # Upload frame to GPU
-            gpu_frame = cv2.cuda_GpuMat()
+            gpu_frame = cv2.cuda.GpuMat()
             gpu_frame.upload(originalFrame)
 
             # Resize on GPU
@@ -67,34 +67,23 @@ class Analytics(threading.Thread):
             frame = resized_gpu.download()
 
             if success:
-                # Run YOLO11 tracking on the frame, persisting tracks between frames
                 results = self.model.track(frame, persist=True)
 
-                # Visualize the results on the frame
-                # annotated_frame = results[0].plot()
-
-                # for result in results:
-                #     for det in result.boxes.data:
-                #         x1, y1, x2, y2, conf, cls = cp.asnumpy(det.detach())
-                #         # if int(cls) == 0:  # Class 0 corresponds to 'person' in COCO dataset
-                #         #     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
                 #scores = results[0].boxes.conf.numpy() # probabilities
-                scores = cp.asnumpy(results[0].boxes.conf)
+                scores = cp.asnumpy(results[0].boxes.conf) # type: ignore
                 #classes = results[0].boxes.cls.numpy() # predicted classes
-                classes = cp.asnumpy(results[0].boxes.cls)
+                classes = cp.asnumpy(results[0].boxes.cls) # type: ignore
                 #boxes = results[0].boxes.xyxy.numpy().astype(np.int32)
-                boxer = cp.asnumpy(results[0].boxes.xyxy)
+                boxer = cp.asnumpy(results[0].boxes.xyxy) # type: ignore
                 boxes = boxer.astype(cp.int32)
                 for score, cls, bbox in zip(scores, classes, boxes):
-                    #class_label = names[cls] # class name
-                    #label = f"{class_label} : {score:0.2f}" # bbox label
-                    #lbl_margin = 3 #label margin
                     if int(cls) == self.classIndex:
                         cv2.rectangle(frame, (bbox[0], bbox[1]),
                                             (bbox[2], bbox[3]),
                                             color=(0, 0, 255),
                                             thickness=2)
+                
+                count = sum(1 for cls in classes if int(cls) == self.classIndex)
                         
                 #out.write(frame)
                 # Display the annotated frame
@@ -106,12 +95,14 @@ class Analytics(threading.Thread):
                 encoded_base64 = base64.b64encode(data)
                 encoded_string = encoded_base64.decode("utf-8")
                 self.writeMessage(self.taskModel.Id, self.client_socket, "Frame", encoded_string)
+                self.writeMessage(self.taskModel.Id, self.client_socket, "Detections", str(count))
 
                 # Break the loop if 'q' is pressed
                 # if cv2.waitKey(1) & 0xFF == ord("q"):
                 #     break
             else:
                 # Break the loop if the end of the video is reached
+                # video is repeated
                 break
 
         # Release the video capture object and close the display window

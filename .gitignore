@@ -8,3 +8,8 @@ models/yolov8m.pt
 models/yolov8n.pt
 models/yolov8s.pt
 models/yolov8x.pt
+models/yolo8l.pt
+models/yolo8m.pt
+models/yolo8n.pt
+models/yolo8s.pt
+models/yolo8x.pt
